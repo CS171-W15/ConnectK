@@ -1,19 +1,66 @@
 import connectK.CKPlayer;
 import connectK.BoardModel;
    
+
+
+
+
 import java.awt.Point;
 import java.lang.Math;
+import java.nio.ByteBuffer;
+
+import java.security.SecureRandom;
+import java.util.HashMap;
+
 
 public class MyAi extends CKPlayer {
 	//Board[col][row]
-
+	private int width; // Width of the board
+	private int height; // Height of the board
+	private int wh; // Width * Height
+	private long[][] table;
+	
 	public MyAi(byte player, BoardModel state) {
 		super(player, state);
 		teamName = "MyAi";
+		
+		
+		width=state.getWidth();
+		height =state.getHeight();
+		wh=width*height;
+		table = new long[wh][2]; 
+		
+		SecureRandom random = new SecureRandom();
+		
+		// i is the total places and j is the player count
+		for (int i = 0; i < wh; ++i)
+			for (int j = 0; j < 2; ++j)
+			{		
+				byte bytes[] = new byte[8];
+				random.nextBytes(bytes);
+				table[i][j] = ByteBuffer.wrap(bytes).getLong();
+				
+			      
+			}
+		System.out.println(state);
+		//HashMap<Integer,Integer> table= new HashMap<Integer,Integer>();
 	}
+	public long getKey(int[] board) {
+		 long hash = 0;
+//		   for (int square = 0; square < board.length; square++)
+//		      if (hasPiece(board[square])) {
+//		         int side = getColour(board[square]);
+//		         hash ^= table[square][side];
+//		      }
+		 return hash;
+		}
 
 	@Override
 	public Point getMove(BoardModel state) {
+		if(player!=1)
+		{
+			
+		}// Create transpostion table when the AI is p2; it speeds p2 times
 		
 		//Create array to store alphas of possible moves
 		int[] moves = new int[state.getWidth()];

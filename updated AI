@@ -1,0 +1,206 @@
+import connectK.CKPlayer;
+import connectK.BoardModel;
+   
+import java.awt.Point;
+import java.lang.Math;
+
+public class MyAi extends CKPlayer {
+	//Default deadline
+	private static final int DEFAULT_DEADLINE = 5000;
+	
+	//Board[col][row]
+
+	public MyAi(byte player, BoardModel state) {
+		super(player, state);
+		teamName = "MyAi";
+	}
+
+	//Uses default time
+	@Override
+	public Point getMove(BoardModel state) {
+
+		return getMove(state, DEFAULT_DEADLINE);
+	}
+	
+	//Uses given deadline
+	//
+	//
+	//
+	@Override
+	public Point getMove(BoardModel state, int deadline) {
+		//Deadline counter
+		long start = System.nanoTime();
+		
+		//Create array to store alphas of possible moves
+		double[] finalAlphas = new double[state.getWidth()];
+
+		//Deadline boolean to break outter loop
+		boolean timeUp = false;
+		for (int j = 0;  ; j++){//For loop that implements the IDS 
+			//array that holds the current iteration of alphas
+			double[] currentAlphas = new double[state.getWidth()];
+			
+			//Store alphas for each possible move (0 to width-1)
+			for (int i = 0; i < currentAlphas.length; i++){
+				Point nextMove = testPoint(state, i);
+				if (nextMove == null){ //If no spaces left in column then move to next column
+					currentAlphas[i] = Integer.MAX_VALUE; //Set alpha value to be large negative since no possible moves in this column;
+					continue;
+				}
+				//Place alpha values returned by miniMax
+				BoardModel nextBoard = state.placePiece(nextMove, this.player);
+				currentAlphas[i] = minimax(nextBoard, j, this.player, true, Integer.MIN_VALUE, Integer.MAX_VALUE, start, deadline);
+				
+				//check deadline
+				long duration = (System.nanoTime() - start) / 1000000; //yieds miliseconds
+				if (duration >= deadline){
+					System.out.println(duration);
+					timeUp = true;
+					break;
+				}
+			}
+			//check deadline
+			if (timeUp)
+				break;
+			
+			//Store the jth iteration (j = depth limit/previous successful depth search)
+			finalAlphas = currentAlphas;
+			
+			//Just test output
+			System.out.println("Alphas for depth limit:" + j);
+			for (double alpha : currentAlphas)
+				System.out.println("\t" + alpha);
+			
+		}
+		
+		
+		//store best alpha
+		double bestAlpha = Integer.MIN_VALUE; //Technically -infinity
+		Point bestAlphaPoint = null;
+		
+		//Compare alpha values to find and set best move
+		for (int i = 0; i < finalAlphas.length; i++){
+			if (finalAlphas[i] > bestAlpha){
+				bestAlpha = finalAlphas[i];
+				bestAlphaPoint = testPoint(state, i);
+			}
+		}
+
+		return bestAlphaPoint;
+	}
+
+	
+	//Heuristics
+	//
+	//
+	//
+	public int eval(BoardModel state){
+		//Get move to evaluate
+		Point lastMove = state.getLastMove();
+		
+		//Total evaluation (alpha)
+		int alpha = 0;
+
+		//Row Heuristic - Check consecutive columns in same row.
+		//If no opposing player within klength, add weight
+		//k^n, where n is the number of checkers within klength
+		int rowRating = 0;
+		Point p = new Point(lastMove.x-1, lastMove.y);
+		if (p.x >= 0){
+			if (state.getSpace(p) == state.getSpace(lastMove))
+				rowRating = 1000;
+			//System.out.println("on left - X:"+p.x+" Y:"+p.y + " | current" +" - X:"+lastMove.x+" Y: "+lastMove.y+" | "+rowRating);
+			//if (lastMove.x == 8)
+				//System.out.println("");
+		}
+
+		
+		
+
+		
+		return rowRating;
+	}
+	
+
+	
+	//Call minimax with alphaBeta pruning
+	//
+	//
+	//
+	public double minimax(BoardModel state, int depth, byte player, boolean maximizingPlayer, double alpha, double beta, long startTime, int deadline){
+		//Check deadline
+		long duration = (System.nanoTime() - startTime) / 1000000; //yieds miliseconds
+		if (duration >= deadline)
+			return 0;
+		
+		//Set player variable to set next move
+		byte p; 
+		if (player == 1)
+			p = 2;
+		else
+			p = 1;
+		
+		
+		
+		boolean hasWinner = false; //imeplement a winner function!!
+		if (depth == 0 || hasWinner) {
+			return eval(state);
+		}
+			
+
+        if (maximizingPlayer) {
+			//Call minimax for next possible moves of opp.
+			for (int i = 0; i < state.getWidth(); i++){
+				Point nextMove = testPoint(state, i);
+				//If there are no available moves in this current column, move to next column
+				if (nextMove == null)
+					continue;
+				
+				//Next move is placed to get next board
+				BoardModel nextBoard = state.placePiece(nextMove, p);
+				alpha = Math.max(alpha, minimax(nextBoard, depth-1, p, false, alpha, beta, startTime, deadline));
+				
+				if (beta <= alpha) { //prunes the next subtree/leaves
+					break;
+				}
+                
+            }
+            return alpha;
+            
+        } else {
+			//Call minimax for next possible moves of opp.
+			for (int i = 0; i < state.getWidth(); i++){
+				Point nextMove = testPoint(state, i);
+				//If there are no available moves in this current column, move to next column
+				if (nextMove == null)
+					continue;
+
+				//Next move is placed to get next board
+				BoardModel nextBoard = state.placePiece(nextMove, p);
+				beta = Math.min(beta, minimax(nextBoard, depth-1, p, true, alpha, beta, startTime, deadline));
+				
+				if (beta <= alpha) { //prunes the next subtree/leaves
+					break;
+				}
+                
+            }
+            return beta;
+        }
+
+	}
+
+
+
+	//Returns the point where we want to place the checker in certain column
+	//
+	//
+	public Point testPoint(BoardModel state, int column){
+		if (column < 0) //Make sure column is a valid slot, if not return null
+			return null;
+		for (int i = 0; i < state.height; i++)
+			if (state.getSpace(column, i) == 0)
+				return new Point(column, i);
+		return null; //return null if no spaces left
+	}
+
+}

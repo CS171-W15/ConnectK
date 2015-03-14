@@ -1,0 +1,744 @@
+/*
+ * Dennis Tran #57725022
+ * Andrew Kim  #60499432
+ */ 
+import connectK.CKPlayer;
+import connectK.BoardModel;
+   
+
+import java.awt.Point;
+import java.lang.Math;
+
+public class BestConnectKNA extends CKPlayer {
+	//Default deadline
+	private static final int DEFAULT_DEADLINE = 5000;
+	
+	//Board variables
+	int k;
+	int width;
+	int height;
+	int[] finalBestAlphas;
+	int[] currentBestAlphas;
+	int[][] gravityOffFinalBestAlphas;
+	int[][] gravityOffCurrentBestAlphas;
+	int maxLimit;
+	byte opponent;
+	double buffer = 120;
+	boolean alphaBetaSwitch = true;
+	
+	//Board[col][row]
+
+	public BestConnectKNA(byte player, BoardModel state) {
+		super(player, state);
+		teamName = "Best Connect-K NA";
+		
+		//Set board variables
+		k = state.getkLength();
+		width = state.getWidth();
+		height = state.getHeight();
+		
+		if (this.player == 1)
+			opponent = 2;
+		else
+			opponent = 1;
+	}
+
+	//Uses default time
+	@Override
+	public Point getMove(BoardModel state) {
+		return getMove(state, DEFAULT_DEADLINE);
+	}
+	
+	/****************************
+	 * ************************ *
+	 * @param state			  * *
+	 * @param deadline		  * *
+	 * Get move with deadline *	*
+	 * ************************ *
+	 ****************************/
+	@Override
+	public Point getMove(BoardModel state, int deadline) {	
+		//Deadline counter
+		long start = System.nanoTime();
+		
+		
+		//Gravity on
+		if (state.gravityEnabled()){
+			//Create array to store alphas of possible moves
+			finalBestAlphas = new int[width];
+
+			//Deadline boolean to break outter loop
+			boolean timeUp = false;
+			for (int j = 0;  ;j++){//For loop that implements the IDS 
+				//array that holds the current iteration of alphas
+				currentBestAlphas = new int[width];
+
+				//Store alphas for each possible move (0 to width-1)
+				for (int i = 0; i < width; i++){
+					Point nextMove = testPoint(state, i);
+					if (nextMove == null){ //If no spaces left in column then move to next column
+						currentBestAlphas[i] = Integer.MIN_VALUE; //Set alpha value to be large negative since no possible moves in this column;
+						continue;
+					}
+					//Place alpha values returned by miniMax
+					BoardModel nextBoard = state.placePiece(nextMove, this.player);
+					currentBestAlphas[i] = miniMax(nextBoard, j*2, false, 
+							Integer.MIN_VALUE, Integer.MAX_VALUE, alphaBetaSwitch, start, deadline);
+					//int value = miniMax(nextBoard, j, false, Integer.MIN_VALUE, Integer.MAX_VALUE, start, deadline);
+					//if (value >= currentBestAlphas[i])
+					//	currentBestAlphas[i] = value;
+					//else if (value == Integer.MIN_VALUE)
+					//	currentBestAlphas[i] = value;
+
+
+					//check deadline
+					if (checkDeadline(start, deadline)){
+						timeUp = true;
+						break;
+					}
+				}
+				//check deadline flag
+				if (timeUp)
+					break;
+				/*
+			System.out.println("Iteration: " + j);
+			for (int alpha : currentBestAlphas){
+				System.out.println(alpha);
+			}
+				 */
+				//Set previous depth best alphas to final alphas if not passed deadline
+				finalBestAlphas = currentBestAlphas;
+
+				//Check if any winning values, if so break
+				for (int alpha : finalBestAlphas)
+					if (alpha == Integer.MAX_VALUE)
+						break;
+			}
+
+			//Choose the median of tied best alphas, if even# take floor index
+			int i = 1;
+			int j = width - 1;
+			int index = 0;
+			int bestAlpha = finalBestAlphas[0];
+			while (i <= j){
+				if (finalBestAlphas[j] >= bestAlpha){
+					bestAlpha = finalBestAlphas[j];
+					index = j;
+				}
+				if (finalBestAlphas[i] >= bestAlpha){
+					bestAlpha = finalBestAlphas[i];
+					index = i;
+				}
+				j--;
+				i++;
+			}
+
+			if (bestAlpha == Integer.MIN_VALUE)
+				for (int z = 0; z < width; z++){
+					Point p = testPoint(state,z);
+					if (p == null)
+						continue;
+					return p;
+				}
+
+			System.out.println("Final alphas");
+			for (int alpha : finalBestAlphas)
+				System.out.println(alpha);
+
+			System.out.println("Column: " + index);
+			System.out.println("Alpha: " + bestAlpha);
+
+			long duration = (System.nanoTime() - start) / 1000000; //yieds miliseconds
+			System.out.println(duration);
+
+			return testPoint(state, index);
+		}
+		//Gravity off
+		else
+		{
+			//Create array to store alphas of possible moves
+			gravityOffFinalBestAlphas = new int[width][height];
+
+			//Deadline boolean to break outter loop
+			boolean timeUp = false;
+			for (int j = 0; ;j++){//For loop that implements the IDS 
+				//array that holds the current iteration of alphas
+				gravityOffCurrentBestAlphas = new int[width][height];
+				System.out.println("max depth: "+j);
+
+				//Store alphas for each possible move (0 to width-1)
+				for (int i = 0; i < width; i++){
+					for (int l = 0; l < height; l++){
+						Point nextMove = testPoint(state, i, l);
+						if (nextMove == null){ //If no spaces left, then move to next available
+							gravityOffCurrentBestAlphas[i][l] = Integer.MIN_VALUE; //Set alpha value to be large negative since no possible moves in this column;
+							continue;
+						}
+						//Place alpha values returned by miniMax
+						BoardModel nextBoard = state.placePiece(nextMove, this.player);
+						int alpha = miniMax(nextBoard, j, false, 
+								Integer.MIN_VALUE, Integer.MAX_VALUE, alphaBetaSwitch, start, deadline);
+						gravityOffCurrentBestAlphas[i][l] = alpha;
+						
+						//winner
+						if (alpha == Integer.MAX_VALUE)
+							return new Point(i,l);
+						//int value = miniMax(nextBoard, j, false, Integer.MIN_VALUE, Integer.MAX_VALUE, start, deadline);
+						//if (value >= currentBestAlphas[i])
+						//	currentBestAlphas[i] = value;
+						//else if (value == Integer.MIN_VALUE)
+						//	currentBestAlphas[i] = value;
+
+
+						//check deadline
+						if (checkDeadline(start, deadline)){
+							timeUp = true;
+							break;
+						}
+					}
+				}
+				//check deadline flag
+				if (timeUp)
+					break;
+				/*
+			System.out.println("Iteration: " + j);
+			for (int alpha : currentBestAlphas){
+				System.out.println(alpha);
+			}
+				 */
+				//Set previous depth best alphas to final alphas if not passed deadline
+				gravityOffFinalBestAlphas = gravityOffCurrentBestAlphas;
+
+				//Check if any winning values, if so break
+				boolean winningVal = false;
+				for (int i = 0; i < width; i++){
+					for (int l = 0; l < height; l++)
+						if (gravityOffFinalBestAlphas[i][l] == Integer.MAX_VALUE){
+							winningVal = true;
+							break;
+						}
+					if (winningVal)
+						break;
+							
+				}
+			}
+			
+			//Choose the median of tied best alphas, if even# take floor index
+			int i = 0;
+			int j = width - 1;
+			int indexX = 0;
+			int indexY = 0;
+			int bestAlpha = gravityOffFinalBestAlphas[0][0];
+			while (i <= j){
+				int k = 0;
+				int m = height - 1;
+				
+				while (k <= m){
+					if (gravityOffFinalBestAlphas[j][m] >= bestAlpha){
+						bestAlpha = gravityOffFinalBestAlphas[j][m];
+						indexX = j;
+						indexY = m;
+					}
+					if (gravityOffFinalBestAlphas[j][k] >= bestAlpha){
+						bestAlpha = gravityOffFinalBestAlphas[j][k];
+						indexX = j;
+						indexY = k;
+					}
+					if (gravityOffFinalBestAlphas[i][m] >= bestAlpha){
+						bestAlpha = gravityOffFinalBestAlphas[i][m];
+						indexX = i;
+						indexY = m;
+					}
+					if (gravityOffFinalBestAlphas[i][k] >= bestAlpha){
+						bestAlpha = gravityOffFinalBestAlphas[i][k];
+						indexX = i;
+						indexY = k;
+					}
+					k++;
+					m--;
+				}
+				j--;
+				i++;
+			}
+
+			if (bestAlpha == Integer.MIN_VALUE)
+				for (int z = 0; z < width; z++){
+					for (int t = 0; t < height; t++){
+					Point p = testPoint(state,z,t);
+					if (p == null)
+						continue;
+					return p;
+					}
+				}
+
+			System.out.println("Final alphas");
+			for (int q = 0; q < width; q++){
+				String str = "";
+				for (int p = 0; p < height; p++){
+					str+=gravityOffFinalBestAlphas[q][p] + "(x:"+q+" y:"+p+")";
+				}
+				System.out.println(str);
+			}
+
+			System.out.println("Column: " + indexX + " Row: " + indexY);
+			System.out.println("Alpha: " + bestAlpha);
+
+			long duration = (System.nanoTime() - start) / 1000000; //yieds miliseconds
+			System.out.println(duration);
+
+			return testPoint(state, indexX, indexY);
+		}
+
+	}
+
+	/****************************************************************
+	 * ************************************************************ *
+	 * @param state												  * *
+	 * @return													  * *
+	 * Heuristic evalution method.								  * *
+	 * Consist of rules for rows, columns, and diagonals.		  * *
+	 * The rules inherit a latter attribute of a center heuristic * *
+	 * ************************************************************ *
+	 ****************************************************************/
+	public int eval(BoardModel state){
+		Point lastMove = state.getLastMove(); //Get previous move to evaluate
+		
+		if (lastMove == null)
+			return 0; //AI is first, so no values on board yet
+		
+		//Set used variables and board boundaries
+		int lbound = 0; //left bound assuming index starts at 0
+		int rbound = width - 1; //right bound (-1 since 0 indexing)
+		int bbound = 0; //bottom vound assuming index starts at 0
+		int ubound = height - 1; //upper bound (-1 since 0 indexing)
+		double x = lastMove.getX();
+		double y = lastMove.getY();
+		byte lastMovePlayer = state.getSpace(lastMove);
+		byte lastMoveOpponent;
+		if (lastMovePlayer == 1)
+			lastMoveOpponent = 2;
+		else
+			lastMoveOpponent = 1;
+		
+		/************************************************************
+		 *	Row Heuristic - Check consecutive columns in same row.	*
+		 *	If no opposing player within klength, add weight      	*
+		 *	k^n, where n is the number of checkers within klength	* 
+		 ************************************************************/
+		int rowRating = 0;
+		
+		//Start farthest left to farthest right within klength of last move (x-point)
+		for (int i = (int) (x - (k-1)); i < x + k; i++){
+			if (i < lbound || i+k-1 > rbound){ //check bounds, if not within-continue next iteration
+				continue;
+			}
+			
+			int count = 0; //Final number of tokens of AI
+			int blocks = 0;
+			boolean blocked = false;
+			int currentCount = 0; //current count without consideration of blocks
+			//If the i-th starting point is in bounds, iterate through the row till k-length
+			//If opponent is blocking path, break and value adds no points to rating
+			for (int j = 0; j < k; j++){
+				byte playerXY = state.getSpace((int)i+j, (int)y);
+				
+				if (playerXY == lastMoveOpponent){
+					blocked = true;
+					blocks++;
+					break; //no need to continue counting because opponent block
+				}
+				else if (playerXY == lastMovePlayer)
+					currentCount++; //add to count if player's cell
+				else
+					continue; //if spot open, don't add to count (just added this for clarification)
+			}
+			
+			if (!blocked)
+				count = currentCount; //if no blocks from opponent, add to final count
+			if (count != 0)
+				rowRating = rowRating + (int) Math.pow(k, count);
+			if (blocks > 0){
+				//rowRating = rowRating - (int) Math.pow(k, blocks);
+			}
+		}
+		
+		
+		/********************************************
+		 *	Column Heuristics.					   	*
+		 *	Similar to row rules, but uses columns.	*
+		 ********************************************/
+		int colRating = 0;
+		
+		//Start from the lowest point kth away from last move
+		for (int i = (int) (y - (k-1)); i < y + k; i++){
+			if (i < bbound || i+k-1 > ubound){ //check bounds, if not within-continue next iteration
+				continue;
+			}
+			
+			int count = 0; //Final number of tokens of AI
+			int blocks = 0;
+			boolean blocked = false;
+			int currentCount = 0; //current count without consideration of blocking
+			//If the ith starting point is in bounds, iterate through the row till klength
+			//If opponent is blocking path, break and value adds no points to rating
+			for (int j = 0; j < k; j++){
+				byte playerXY = state.getSpace((int)x, (int)i+j);
+				
+				if (playerXY == lastMoveOpponent){
+					blocked = true;
+					blocks++;
+					break;//no need to continue counting because opponent block
+				}
+				else if (playerXY == lastMovePlayer)
+					currentCount++; //add to count if player's cell
+				else
+					continue; //if spot open, don't add to count (just added this for clarification)
+			}
+			if (!blocked)
+				count = currentCount; //if not blocks from opponent, add to final count
+			if (count != 0)
+				colRating = colRating + (int) Math.pow(k, count);
+			if (blocks > 0){
+				//colRating = colRating - (int) Math.pow(k, blocks);
+			}
+		}
+		
+		/****************************************************
+		 *	Diagonal Heuristic (top left to bottom right)	*
+		 *	Same rules as row/column						*
+		 ****************************************************/
+		int tlbrRating = 0;
+		
+		//Inclusion bounds kth away from (x,y) (may not be within bounds of board...the last move is the center)
+		int leftBoundX = (int) x - (k-1); //farthest left kth away from x 
+		int rightBoundX = (int) x + (k-1); //farthest right kth away from x 
+		int bottomBoundY = (int) y - (k-1); //lowest bottom kth away from y
+		int topBoundY = (int) y + (k-1); //highest top kth away from y 
+		
+		//start from highest top left
+		int i = leftBoundX;
+		int j = topBoundY;
+		
+		//Only calculate the diagonals
+		//end at lowest bottom right
+		while (i <= rightBoundX && j >= bottomBoundY){
+				if (i < lbound || i+(k-1) > rbound || j > ubound || j-(k-1) < bbound){ //check board bounds, if not within-continue next iteration
+					i++;
+					j--;
+					continue;
+				}
+
+				int count = 0; //Final number of tokens of AI
+				int blocks = 0;
+				boolean blocked = false;
+				int currentCount = 0; //current count without consideration of breaking
+				//If the ith starting point is in bounds, iterate through the row till klength
+				//If opponent is blocking path, break and value adds no points to rating
+				for (int l = 0; l < k; l++){
+					byte playerXY = state.getSpace((int)i+l, (int)j-l);
+					
+					if (playerXY == lastMoveOpponent){
+						blocked = true;
+						blocks++;
+						break;//no need to continue counting because opponent block
+					}
+					else if (playerXY == lastMovePlayer)
+						currentCount++;
+					else
+						continue; //if spot open, don't add to count (just added this for clarification)
+				}
+				if (!blocked)
+					count = currentCount;
+				if (count != 0)
+					tlbrRating = tlbrRating + (int) Math.pow(k, count);
+				if (blocks >0){
+					//tlbrRating = tlbrRating - (int) Math.pow(k, blocks);
+				}
+
+				i++;
+				j--;
+		}
+		
+		/****************************************************
+		 *	Diagonal Heuristic (bottom left to top right)	*
+		 *	Same rules as row/column						*
+		 ****************************************************/
+		int bltrRating = 0;
+		
+		//Inclusion bounds kth away from (x,y) (may not be within bounds of board...the point (x,y) is center)
+		//Used same inclusion bounds above
+		
+		//start from highest top left
+		int m = leftBoundX;
+		int n = bottomBoundY;
+		
+		//Only calculate the diagonals
+		//end at highest right
+		while (m <= rightBoundX && n >= bottomBoundY){
+				if (m < lbound || m+(k-1) > rbound|| n < bbound || n+(k-1) > ubound){ //check board bounds, if not within-continue next iteration
+					m++;
+					n++;
+					continue;
+				}
+
+				int count = 0; //Final number of tokens of AI
+				int blocks = 0;
+				boolean blocked = false;
+				int currentCount = 0; //current count without consideration of breaking
+				//If the ith starting point is in bounds, iterate through the row till klength
+				//If opponent is blocking path, break and value adds no points to rating
+				for (int l = 0; l < k; l++){
+					byte playerXY = state.getSpace((int)m+l, (int)n+l);
+					
+					if (playerXY == lastMoveOpponent){
+						blocked = true;
+						blocks++;
+						break;//no need to continue counting because opponent block
+					}
+					else if (playerXY == lastMovePlayer)
+						currentCount++;
+					else
+						continue; //if spot open, don't add to count (just added this for clarification)
+				}
+				if (!blocked)
+					count = currentCount;
+				if (count != 0)
+					bltrRating = bltrRating + (int) Math.pow(k, count);
+				if (blocks > 0){
+					//bltrRating = bltrRating - (int) Math.pow(k, blocks);
+				}
+				
+				m++;
+				n++;
+		}
+
+
+		
+		return rowRating + colRating + tlbrRating + bltrRating;
+	}
+	
+	/********************************************
+	 * **************************************** *
+	 * @param state							  * *
+	 * @param depth							  * *
+	 * @param player						  * *
+	 * @param maximizingPlayer				  * *
+	 * @param alpha							  * *
+	 * @param beta							  * *
+	 * @param startTime						  * *
+	 * @param deadline						  * *
+	 * @return								  * *
+	 * miniMax method with alpha-beta pruning * *
+	 * Call miniMax with alphaBeta pruning	  * *
+	 * **************************************** *
+	 ********************************************/
+	public int miniMax(BoardModel state, int depth, boolean maximizingPlayer, 
+			int alpha, int beta, boolean alphaBetaSwitch ,long startTime, int deadline){
+		//Check deadline
+		if (checkDeadline(startTime, deadline))
+			return 0;
+		
+		//check quiescence
+		boolean loss = quiescence(state);
+		
+		if (loss)
+			depth++;
+		
+		//Check for winning move... if winning move isn't the AI, return -infinity
+		boolean hasWinner = false;
+		byte winner = state.winner();
+		if (winner != -1)
+			hasWinner = true;
+		
+		if (depth == 0 || hasWinner) {
+			if (hasWinner){
+				if (this.player == winner){
+					return Integer.MAX_VALUE;
+				}
+				else{
+					return Integer.MIN_VALUE;
+				}
+			}
+			return eval(state); //return utility if no winner
+		}
+			
+		if (state.gravityEnabled()){
+			if (maximizingPlayer) {
+				//Call minimax for next possible moves of opp.
+				for (int i = 0; i < width; i++){
+					Point nextMove = testPoint(state, i);
+					//If there are no available moves in this current column, move to next column
+					if (nextMove == null){
+						continue;
+					}
+
+					//Next move is placed to get next board
+					BoardModel nextBoard = state.placePiece(nextMove, this.player);
+					alpha = Math.max(alpha, miniMax(nextBoard, depth-1, false, 
+							alpha, beta, alphaBetaSwitch,startTime, deadline));
+
+					if (beta <= alpha && alphaBetaSwitch) { //prunes the next subtree/leaves
+						break;
+					}
+
+				}
+				return alpha;
+
+			} else {
+				//Call minimax for next possible moves of opp.
+				for (int i = 0; i < width; i++){
+					Point nextMove = testPoint(state, i);
+					//If there are no available moves in this current column, move to next column
+					if (nextMove == null){
+						continue;
+					}
+
+					//Next move is placed to get next board
+					BoardModel nextBoard = state.placePiece(nextMove, opponent);
+					beta = Math.min(beta, miniMax(nextBoard, depth-1, true, 
+							alpha, beta, alphaBetaSwitch,startTime, deadline));
+
+					if (beta <= alpha && alphaBetaSwitch) { //prunes the next subtree/leaves
+						break;
+					}
+
+				}
+				return beta;
+			}
+		}else{//Gravity off
+			if (maximizingPlayer) {
+				boolean breakAlpha = false;
+				//Call minimax for next possible moves of opp.
+				for (int i = 0; i < width; i++){
+					for (int l = 0; l < height; l++){
+						Point nextMove = testPoint(state, i, l);
+						if (nextMove == null){ //If no spaces left, then move to next available
+							//gravityOffCurrentBestAlphas[i][l] = Integer.MIN_VALUE; //Set alpha value to be large negative since no possible moves in this column;
+							continue;
+						}
+
+
+						//Next move is placed to get next board
+						BoardModel nextBoard = state.placePiece(nextMove, this.player);
+						alpha = Math.max(alpha, miniMax(nextBoard, depth-1, false, 
+								alpha, beta, alphaBetaSwitch,startTime, deadline));
+
+						if (beta <= alpha && alphaBetaSwitch) { //prunes the next subtree/leaves
+							breakAlpha = true;
+							break;
+						}
+
+					}
+					if (breakAlpha)
+						break;
+				}
+				return alpha;
+
+			} else {
+				boolean breakBeta = false;
+				//Call minimax for next possible moves of opp.
+				for (int i = 0; i < width; i++){
+					for (int l = 0; l < height; l++){
+						Point nextMove = testPoint(state, i, l);
+						if (nextMove == null){ //If no spaces left, then move to next available
+							//gravityOffCurrentBestAlphas[i][l] = Integer.MIN_VALUE; //Set alpha value to be large negative since no possible moves in this column;
+							continue;
+						}
+						//Next move is placed to get next board
+						BoardModel nextBoard = state.placePiece(nextMove, opponent);
+						beta = Math.min(beta, miniMax(nextBoard, depth-1, true, 
+								alpha, beta, alphaBetaSwitch,startTime, deadline));
+
+						if (beta <= alpha && alphaBetaSwitch) { //prunes the next subtree/leaves
+							breakBeta = true;
+							break;
+						}
+
+					}
+					if (breakBeta)
+						break;
+				}
+				return beta;
+			}
+		}
+
+	}
+	
+	public boolean quiescence(BoardModel state){
+
+		for (int i = 0; i < width; i++){
+			Point nextMove = testPoint(state, i);
+			//If there are no available moves in this current column, move to next column
+			if (nextMove == null){
+				continue;
+			}
+
+			//Next move is placed to get next board
+			BoardModel nextBoard = state.placePiece(nextMove, this.player);
+			
+			//check values one step ahead
+			int val = eval(nextBoard);
+			if (val == Integer.MIN_VALUE)
+				return true;
+		}
+			
+	return false;
+}
+	
+	/**********************************************
+	 * ****************************************** *
+	 * @param startTime							* *
+	 * @param deadline							* *
+	 * @return									* *
+	 * Checks to see if deadline has passed.	* *
+	 * returns true if passed, false if not		* *
+	 * startTime in nano sec. to mili sec.		* *
+	 * ****************************************** *
+	 **********************************************/
+	public boolean checkDeadline(long startTime, int deadline){
+		long duration = (System.nanoTime() - startTime) / 1000000; //yieds miliseconds
+		if (duration + buffer >= deadline){
+			return true;
+		}
+		else return false;
+	}
+
+
+	/****************************************************
+	 * ************************************************ *
+	 * @param state									  * *
+	 * @param column								  * *
+	 * @return										  * *
+	 * Returns a spot in the column, null if no spots * *
+	 * ************************************************ *
+	 ****************************************************/
+	public Point testPoint(BoardModel state, int column){
+		if (column < 0) //Make sure column is a valid slot, if not return null
+			return null;
+		for (int i = 0; i < height; i++)
+			if (state.getSpace(column, i) == 0)
+				return new Point(column, i);
+		return null; //return null if no spaces left
+	}
+
+	/****************************************************
+	 * ************************************************ *
+	 * @param state									  * *
+	 * @param column								  * *
+	 * @return										  * *
+	 * Returns a spot in the column, null if no spots * *
+	 * ************************************************ *
+	 ****************************************************/
+	public Point testPoint(BoardModel state, int column, int row){
+		if (column < 0 || row < 0) //Make sure column is a valid slot, if not return null
+			return null;
+		if (state.getSpace(column, row) == 0){
+			return new Point(column, row);
+		}
+		return null; // if not available
+	}
+	
+	
+	
+
+}
